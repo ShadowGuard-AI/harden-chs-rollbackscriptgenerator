@@ -1,3 +1,5 @@
+![Banner](banner.png)
+
 # harden-chs-RollbackScriptGenerator
 Generates a rollback script from a given configuration hardening script, allowing administrators to easily revert changes if necessary. Uses the 'before' state of any configuration change to construct the rollback. Requires changes in the original script to add 'before' state logging. - Focused on Generates hardened configuration files (e.g., SSH, web servers, databases) based on predefined security policies and user-defined parameters.  Leverages YAML for policy definitions and Jinja2 for templating, allowing for customized hardening scripts tailored to specific environments and compliance requirements.  Focuses on automating the creation of secure-by-default configurations.
 
