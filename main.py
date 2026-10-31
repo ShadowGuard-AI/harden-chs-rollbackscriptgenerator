@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
-import yaml
-import jinja2
 import logging
 import os
 import re
+import sys
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -40,7 +40,7 @@ def extract_rollback_commands(hardening_script_path):
         with open(hardening_script_path, 'r') as f:
             for line in f:
                 # Look for lines that log the 'before' state
-                match = re.search(r"^#BEFORE: (.*)$", line) # Example of how to identify 'before' state logging.  Adjust regex as needed.
+                match = re.search(r"^\s*#BEFORE: (.*)$", line) # Example of how to identify 'before' state logging.  Adjust regex as needed.
                 if match:
                     command = match.group(1).strip()
                     rollback_commands.append(command)
@@ -65,7 +65,7 @@ def generate_rollback_script(rollback_commands, rollback_script_path, dry_run=Fa
     try:
         if not rollback_commands:
             logging.warning("No rollback commands to generate.")
-            return
+            return False
 
         # Reverse the commands to revert in the correct order (LIFO).
         rollback_commands.reverse()
@@ -79,7 +79,7 @@ def generate_rollback_script(rollback_commands, rollback_script_path, dry_run=Fa
 
         if dry_run:
             logging.info("Dry run: Rollback script content:\n" + script_content)
-            return
+            return True
 
         with open(rollback_script_path, 'w') as f:
             f.write(script_content)
@@ -88,9 +88,11 @@ def generate_rollback_script(rollback_commands, rollback_script_path, dry_run=Fa
         os.chmod(rollback_script_path, 0o755)  # Security: Ensure script is executable by owner
 
         logging.info(f"Rollback script generated successfully: {rollback_script_path}")
+        return True
 
     except Exception as e:
         logging.error(f"Error generating rollback script: {e}")
+        return False
 
 
 def main():
@@ -107,15 +109,23 @@ def main():
     # Input validation: Check if the hardening script exists.
     if not os.path.exists(hardening_script_path):
         logging.error(f"Hardening script not found: {hardening_script_path}")
-        return
+        sys.exit(1)
+
+    # Refuse in-place output before any write: the rollback path must not
+    # resolve to the hardening script itself.
+    if Path(hardening_script_path).resolve() == Path(rollback_script_path).resolve():
+        logging.error(f"Refusing in-place output: rollback path '{rollback_script_path}' resolves to the hardening script '{hardening_script_path}'.")
+        sys.exit(1)
 
     logging.info(f"Generating rollback script for: {hardening_script_path}")
 
     rollback_commands = extract_rollback_commands(hardening_script_path)
     if rollback_commands:
-      generate_rollback_script(rollback_commands, rollback_script_path, dry_run)
+      if not generate_rollback_script(rollback_commands, rollback_script_path, dry_run):
+          sys.exit(1)
     else:
       logging.warning("No rollback commands extracted. Rollback script will not be generated.")
+      sys.exit(1)
 
 
 if __name__ == "__main__":
